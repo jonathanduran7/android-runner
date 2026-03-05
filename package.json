@@ -4,21 +4,57 @@
   "description": "",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.109.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
-      {
-        "command": "android-runner.helloWorld",
-        "title": "Hello World"
+      { "command": "androidRunner.runAndLogs", "title": "Android: Run & Stream Logs" },
+      { "command": "androidRunner.runStaging", "title": "Android: Run Staging" },
+      { "command": "androidRunner.logs", "title": "Android: Logs" },
+      { "command": "androidRunner.killEmulator", "title": "Android: Kill Emulator" },
+      { "command": "androidRunner.stopLogs", "title": "Android: Stop Logs" }
+    ],
+    "configuration": {
+      "title": "Android Runner",
+      "properties": {
+        "androidRunner.sdkPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to Android SDK (e.g. ~/Library/Android/sdk). Leave empty to use ANDROID_HOME/ANDROID_SDK_ROOT or auto-detect."
+        },
+        "androidRunner.defaultAvd": {
+          "type": "string",
+          "default": "Pixel_9_API34",
+          "description": "Default AVD name to use when starting emulator"
+        },
+        "androidRunner.keepEmulator": {
+          "type": "boolean",
+          "default": false,
+          "description": "Keep emulator running when stopping logs (do not kill on exit)"
+        },
+        "androidRunner.taskAppIds": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "default": {
+            "installStaging": "com.altwo.wallet.staging",
+            "installDebug": "com.altwo.wallet.debug"
+          },
+          "description": "Map Gradle install task suffix to applicationId (e.g. installStaging -> com.example.staging)"
+        }
       }
-    ]
+    }
   },
+  "activationEvents": [
+    "onCommand:androidRunner.runAndLogs",
+    "onCommand:androidRunner.runStaging",
+    "onCommand:androidRunner.logs",
+    "onCommand:androidRunner.killEmulator",
+    "onCommand:androidRunner.stopLogs"
+  ],
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
