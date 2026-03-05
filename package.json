@@ -25,6 +25,10 @@
         {
           "id": "androidRunnerView",
           "name": "Android"
+        },
+        {
+          "id": "androidNetworkView",
+          "name": "Network"
         }
       ]
     },
@@ -36,8 +40,19 @@
       { "command": "androidRunner.killEmulator", "title": "Android: Kill Emulator" },
       { "command": "androidRunner.stopLogs", "title": "Android: Stop Logs" },
       { "command": "androidRunner.focusLogs", "title": "Android: Focus Logs" },
-      { "command": "androidRunner.refreshView", "title": "Android Runner: Refresh" }
+      { "command": "androidRunner.refreshView", "title": "Android Runner: Refresh" },
+      { "command": "androidRunner.clearNetworkLog", "title": "Android: Clear Network Log", "icon": "$(clear-all)" },
+      { "command": "androidRunner.showNetworkTransaction", "title": "Android: Show Network Transaction" }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "androidRunner.clearNetworkLog",
+          "when": "view == androidNetworkView",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "Android Runner",
       "properties": {
@@ -75,6 +90,7 @@
   },
   "activationEvents": [
     "onView:androidRunnerView",
+    "onView:androidNetworkView",
     "onCommand:androidRunner.runAndLogs",
     "onCommand:androidRunner.runStaging",
     "onCommand:androidRunner.reinstallLast",

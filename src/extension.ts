@@ -8,6 +8,7 @@ import { listInstallTasks } from "./gradle.js";
 import { runAndStreamLogs, reinstallOnExistingEmulator } from "./runner.js";
 import { getSdkPath } from "./sdk.js";
 import { registerAndroidView } from "./androidView.js";
+import { registerNetworkView } from "./networkLog.js";
 
 const USE_EXISTING_EMULATOR = "__use_existing__";
 
@@ -71,10 +72,13 @@ function createNotifier(): (message: string, type?: "info" | "warn") => void {
 
 export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Android Runner");
+  const networkOutput = vscode.window.createOutputChannel("Android Network");
 
   let currentLogcatDispose: (() => void) | null = null;
   let currentStopLogcat: (() => void) | null = null;
   let lastRun: LastRunOptions | null = null;
+
+  const { parser: networkParser } = registerNetworkView(context, networkOutput);
 
   // Status bar: Run | Logs | Stop | Kill (higher priority = more to the left)
   const statusRun = vscode.window.createStatusBarItem(
@@ -270,6 +274,7 @@ export function activate(context: vscode.ExtensionContext) {
           keepEmulator,
           output,
           notify: createNotifier(),
+          onHttpLine: (line) => networkParser.processLine(line),
         });
 
         currentLogcatDispose = result.logcatDispose;
@@ -310,6 +315,7 @@ export function activate(context: vscode.ExtensionContext) {
           keepEmulator,
           output,
           notify: createNotifier(),
+          onHttpLine: (line) => networkParser.processLine(line),
         });
         currentLogcatDispose = result.logcatDispose;
         currentStopLogcat = result.stopLogcat;
@@ -363,7 +369,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         disposeLogcat();
 
-        const { dispose } = streamLogcat(deviceId, output, pid);
+        const { dispose } = streamLogcat(deviceId, output, pid, (line) => networkParser.processLine(line));
         currentLogcatDispose = dispose;
         output.show(true);
         output.appendLine(
@@ -442,6 +448,7 @@ export function activate(context: vscode.ExtensionContext) {
           appId: run.appId,
           output,
           notify: createNotifier(),
+          onHttpLine: (line) => networkParser.processLine(line),
         });
 
         currentLogcatDispose = result.logcatDispose;

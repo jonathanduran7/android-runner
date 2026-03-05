@@ -18,6 +18,8 @@ export interface RunOptions {
   output: vscode.OutputChannel;
   /** Called for user-visible notifications (info/warn). Respects androidRunner.notifications setting when used from extension. */
   notify?: (message: string, type?: "info" | "warn") => void;
+  /** Optional callback invoked for each raw OkHttp logcat line for network parsing. */
+  onHttpLine?: (line: string) => void;
 }
 
 export interface RunResult {
@@ -36,12 +38,13 @@ interface InstallAndLogsOptions {
   appId: string;
   output: vscode.OutputChannel;
   notify?: (message: string, type?: "info" | "warn") => void;
+  onHttpLine?: (line: string) => void;
 }
 
 async function installOnDeviceAndStreamLogs(
   options: InstallAndLogsOptions
 ): Promise<RunResult> {
-  const { projectRoot, deviceId, gradleTask, appId, output, notify } = options;
+  const { projectRoot, deviceId, gradleTask, appId, output, notify, onHttpLine } = options;
 
   // 1. Run Gradle install
   await runGradleInstall(projectRoot, gradleTask, output);
@@ -85,7 +88,7 @@ async function installOnDeviceAndStreamLogs(
   }
 
   // 4. Stream logcat
-  const { dispose: logcatDisposeInner } = streamLogcat(deviceId, output, pid);
+  const { dispose: logcatDisposeInner } = streamLogcat(deviceId, output, pid, onHttpLine);
 
   output.appendLine(
     pid
@@ -122,6 +125,7 @@ export async function runAndStreamLogs(
     keepEmulator,
     output,
     notify,
+    onHttpLine,
   } = options;
 
   output.show(true);
@@ -158,6 +162,7 @@ export async function runAndStreamLogs(
     appId,
     output,
     notify,
+    onHttpLine,
   });
 
   // 3. Register cleanup
@@ -187,7 +192,7 @@ export async function runAndStreamLogs(
 export async function reinstallOnExistingEmulator(
   options: Omit<RunOptions, "avdName" | "keepEmulator"> & { deviceId: string }
 ): Promise<RunResult> {
-  const { projectRoot, gradleTask, appId, output, notify, deviceId } = options;
+  const { projectRoot, gradleTask, appId, output, notify, deviceId, onHttpLine } = options;
 
   output.show(true);
   output.appendLine("[INFO] Android Runner - Reinstall on Existing Emulator");
@@ -202,5 +207,6 @@ export async function reinstallOnExistingEmulator(
     appId,
     output,
     notify,
+    onHttpLine,
   });
 }

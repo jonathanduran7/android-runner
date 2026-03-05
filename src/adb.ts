@@ -150,12 +150,15 @@ export async function killEmulator(deviceId: string): Promise<void> {
 }
 
 /**
- * Stream logcat to OutputChannel, optionally filtered by PID (cross-platform)
+ * Stream logcat to OutputChannel, optionally filtered by PID (cross-platform).
+ * @param onHttpLine - optional callback invoked for every raw logcat line that
+ *   contains "okhttp.OkHttpClient:", allowing callers to feed an OkHttpParser.
  */
 export function streamLogcat(
   deviceId: string,
   output: vscode.OutputChannel,
-  pid?: string | null
+  pid?: string | null,
+  onHttpLine?: (line: string) => void
 ): { child: ReturnType<typeof spawn>; dispose: () => void } {
   const adb = getAdbPath();
   const args = ["-s", deviceId, "logcat"];
@@ -165,15 +168,23 @@ export function streamLogcat(
 
   const onData = (data: Buffer | string) => {
     const text = data.toString();
-    if (pid) {
-      const lines = text.split("\n");
-      for (const line of lines) {
+    const lines = text.split("\n");
+
+    for (const line of lines) {
+      // Feed OkHttp lines to the network parser regardless of PID filter
+      if (onHttpLine && line.includes("okhttp.OkHttpClient:")) {
+        onHttpLine(line);
+      }
+
+      if (pid) {
         if (line.includes(pid)) {
           output.append(line + "\n");
         }
+      } else {
+        if (line) {
+          output.append(line + "\n");
+        }
       }
-    } else {
-      output.append(text);
     }
   };
 
