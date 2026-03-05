@@ -163,6 +163,18 @@ function statusLabel(code: number): string {
   return String(code);
 }
 
+function tryFormatJson(body: string): string {
+  const trimmed = body.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2);
+    } catch {
+      // not valid JSON, return as-is
+    }
+  }
+  return body;
+}
+
 function formatUrl(url: string): { host: string; path: string } {
   try {
     const u = new URL(url);
@@ -207,8 +219,8 @@ export function printTransaction(
 
     if (tx.responseBody) {
       output.appendLine("");
-      // Indent each body line for readability
-      for (const line of tx.responseBody.split("\n")) {
+      const formatted = tryFormatJson(tx.responseBody);
+      for (const line of formatted.split("\n")) {
         output.appendLine(`  ${line}`);
       }
     }
@@ -254,7 +266,7 @@ export class NetworkLogTreeProvider
 
     item.description = this.descriptionFor(tx);
     item.tooltip = tx.url;
-    item.iconPath = new vscode.ThemeIcon(this.themeIcon(tx));
+    item.iconPath = this.themeIcon(tx);
     item.command = {
       command: "androidRunner.showNetworkTransaction",
       title: "Show transaction",
@@ -281,13 +293,39 @@ export class NetworkLogTreeProvider
     return "";
   }
 
-  private themeIcon(tx: HttpTransaction): string {
-    if (tx.error) {return "error";}
+  private themeIcon(tx: HttpTransaction): vscode.ThemeIcon {
+    if (tx.error) {
+      return new vscode.ThemeIcon(
+        "circle-filled",
+        new vscode.ThemeColor("charts.red")
+      );
+    }
     const code = tx.statusCode ?? 0;
-    if (code >= 500) {return "error";}
-    if (code >= 400) {return "warning";}
-    if (code >= 200) {return "check";}
-    return "loading~spin";
+    if (code >= 500) {
+      return new vscode.ThemeIcon(
+        "circle-filled",
+        new vscode.ThemeColor("charts.red")
+      );
+    }
+    if (code >= 400) {
+      return new vscode.ThemeIcon(
+        "circle-filled",
+        new vscode.ThemeColor("charts.orange")
+      );
+    }
+    if (code >= 300) {
+      return new vscode.ThemeIcon(
+        "circle-filled",
+        new vscode.ThemeColor("charts.yellow")
+      );
+    }
+    if (code >= 200) {
+      return new vscode.ThemeIcon(
+        "circle-filled",
+        new vscode.ThemeColor("charts.green")
+      );
+    }
+    return new vscode.ThemeIcon("loading~spin");
   }
 }
 
