@@ -67,6 +67,62 @@ export function activate(context: vscode.ExtensionContext) {
 
   let currentLogcatDispose: (() => void) | null = null;
 
+  // Status bar: Run | Logs | Stop | Kill (higher priority = more to the left)
+  const statusRun = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    400
+  );
+  statusRun.text = "$(play) Run";
+  statusRun.tooltip = "Android: Run & Stream Logs";
+  statusRun.command = "androidRunner.runAndLogs";
+
+  const statusLogs = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    300
+  );
+  statusLogs.text = "$(output) Logs";
+  statusLogs.tooltip = "Android: Logs";
+  statusLogs.command = "androidRunner.logs";
+
+  const statusStop = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    200
+  );
+  statusStop.text = "$(debug-stop) Stop";
+  statusStop.tooltip = "Android: Stop Logs";
+  statusStop.command = "androidRunner.stopLogs";
+
+  const statusKill = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    100
+  );
+  statusKill.text = "$(trash) Kill";
+  statusKill.tooltip = "Android: Kill Emulator";
+  statusKill.command = "androidRunner.killEmulator";
+
+  const updateStatusBar = () => {
+    const visible = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
+    if (visible) {
+      statusRun.show();
+      statusLogs.show();
+      statusStop.show();
+      statusKill.show();
+    } else {
+      statusRun.hide();
+      statusLogs.hide();
+      statusStop.hide();
+      statusKill.hide();
+    }
+  };
+  updateStatusBar();
+  context.subscriptions.push(
+    statusRun,
+    statusLogs,
+    statusStop,
+    statusKill,
+    vscode.workspace.onDidChangeWorkspaceFolders(updateStatusBar)
+  );
+
   const disposeLogcat = () => {
     if (currentLogcatDispose) {
       currentLogcatDispose();
