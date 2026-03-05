@@ -44,6 +44,11 @@
             "installDebug": "com.altwo.wallet.debug"
           },
           "description": "Map Gradle install task suffix to applicationId (e.g. installStaging -> com.example.staging)"
+        },
+        "androidRunner.notifications": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show notifications for emulator ready, install complete, app launched, logs streaming, etc."
         }
       }
     }

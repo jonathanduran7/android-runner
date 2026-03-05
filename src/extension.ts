@@ -50,6 +50,18 @@ function checkSdk(): void {
   }
 }
 
+function createNotifier(): (message: string, type?: "info" | "warn") => void {
+  return (message: string, type?: "info" | "warn") => {
+    if (getConfig().get<boolean>("notifications") !== false) {
+      if (type === "warn") {
+        vscode.window.showWarningMessage(message);
+      } else {
+        vscode.window.showInformationMessage(message);
+      }
+    }
+  };
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Android Runner");
 
@@ -163,6 +175,7 @@ export function activate(context: vscode.ExtensionContext) {
           appId,
           keepEmulator,
           output,
+          notify: createNotifier(),
         });
 
         currentLogcatDispose = result.logcatDispose;
@@ -195,6 +208,7 @@ export function activate(context: vscode.ExtensionContext) {
           appId,
           keepEmulator,
           output,
+          notify: createNotifier(),
         });
         currentLogcatDispose = result.logcatDispose;
       } catch (err) {
@@ -255,6 +269,11 @@ export function activate(context: vscode.ExtensionContext) {
             ? `[INFO] Streaming logs for ${appId} (PID ${pid})`
             : `[INFO] Streaming full logcat`
         );
+        if (getConfig().get<boolean>("notifications") !== false) {
+          vscode.window.showInformationMessage(
+            `Streaming logs for ${appId}. Use Android: Stop Logs to stop.`
+          );
+        }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);

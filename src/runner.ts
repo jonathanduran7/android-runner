@@ -16,6 +16,8 @@ export interface RunOptions {
   appId: string;
   keepEmulator: boolean;
   output: vscode.OutputChannel;
+  /** Called for user-visible notifications (info/warn). Respects androidRunner.notifications setting when used from extension. */
+  notify?: (message: string, type?: "info" | "warn") => void;
 }
 
 export interface RunResult {
@@ -38,6 +40,7 @@ export async function runAndStreamLogs(
     appId,
     keepEmulator,
     output,
+    notify,
   } = options;
 
   output.show(true);
@@ -52,12 +55,14 @@ export async function runAndStreamLogs(
   if (existing) {
     deviceId = existing;
     output.appendLine(`[INFO] Using existing emulator: ${deviceId}`);
+    notify?.("Using existing emulator", "info");
   } else if (avdName) {
     startEmulator(avdName, output);
     startedEmulator = true;
     output.appendLine("[INFO] Waiting for emulator to be ready...");
     deviceId = await waitForEmulator();
     output.appendLine(`[INFO] Emulator ready: ${deviceId}`);
+    notify?.("Emulator ready", "info");
   } else {
     throw new Error(
       "No emulator running and no AVD selected. Start an emulator or select an AVD."
@@ -66,6 +71,7 @@ export async function runAndStreamLogs(
 
   // 2. Run Gradle install
   await runGradleInstall(projectRoot, gradleTask, output);
+  notify?.("Install complete", "info");
 
   // 3. Wait for install to settle (broadcasts, etc.) then launch launcher activity
   await new Promise((r) => setTimeout(r, 1500));
@@ -81,6 +87,7 @@ export async function runAndStreamLogs(
     pid = await getAppPid(deviceId, appId);
     if (pid) {
       output.appendLine(`[INFO] App PID: ${pid}`);
+      notify?.("App launched", "info");
       break;
     }
     output.appendLine(`[INFO] App not running yet (attempt ${i}/${maxAttempts}), retrying launch...`);
@@ -98,6 +105,7 @@ export async function runAndStreamLogs(
     output.appendLine(
       "[WARN] Could not get app PID. Streaming full logcat (unfiltered)."
     );
+    notify?.("App PID not found. Streaming full logcat.", "warn");
   }
 
   // 5. Stream logcat
@@ -109,6 +117,7 @@ export async function runAndStreamLogs(
       : "[INFO] Streaming full logcat. Press Stop or close to exit."
   );
   output.appendLine("");
+  notify?.("Streaming logs. Use Android: Stop Logs to stop.", "info");
 
   // 6. Register cleanup
   const cleanup = () => {
@@ -116,6 +125,7 @@ export async function runAndStreamLogs(
     if (startedEmulator && !keepEmulator && deviceId.startsWith("emulator-")) {
       output.appendLine(`[INFO] Killing emulator ${deviceId}`);
       killEmulator(deviceId).catch(() => {});
+      notify?.("Emulator stopped", "info");
     }
   };
 
