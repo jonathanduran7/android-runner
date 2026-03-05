@@ -11,12 +11,31 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "androidRunner",
+          "title": "Android Runner",
+          "icon": "resources/android.svg"
+        }
+      ]
+    },
+    "views": {
+      "androidRunner": [
+        {
+          "id": "androidRunnerView",
+          "name": "Android"
+        }
+      ]
+    },
     "commands": [
       { "command": "androidRunner.runAndLogs", "title": "Android: Run & Stream Logs" },
       { "command": "androidRunner.runStaging", "title": "Android: Run Staging" },
       { "command": "androidRunner.logs", "title": "Android: Logs" },
       { "command": "androidRunner.killEmulator", "title": "Android: Kill Emulator" },
-      { "command": "androidRunner.stopLogs", "title": "Android: Stop Logs" }
+      { "command": "androidRunner.stopLogs", "title": "Android: Stop Logs" },
+      { "command": "androidRunner.focusLogs", "title": "Android: Focus Logs" },
+      { "command": "androidRunner.refreshView", "title": "Android Runner: Refresh" }
     ],
     "configuration": {
       "title": "Android Runner",
@@ -54,11 +73,14 @@
     }
   },
   "activationEvents": [
+    "onView:androidRunnerView",
     "onCommand:androidRunner.runAndLogs",
     "onCommand:androidRunner.runStaging",
     "onCommand:androidRunner.logs",
     "onCommand:androidRunner.killEmulator",
-    "onCommand:androidRunner.stopLogs"
+    "onCommand:androidRunner.stopLogs",
+    "onCommand:androidRunner.focusLogs",
+    "onCommand:androidRunner.refreshView"
   ],
   "scripts": {
     "vscode:prepublish": "npm run compile",

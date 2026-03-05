@@ -7,6 +7,7 @@ import { listAvds } from "./emulator.js";
 import { listInstallTasks } from "./gradle.js";
 import { runAndStreamLogs } from "./runner.js";
 import { getSdkPath } from "./sdk.js";
+import { registerAndroidView } from "./androidView.js";
 
 const USE_EXISTING_EMULATOR = "__use_existing__";
 
@@ -122,6 +123,9 @@ export function activate(context: vscode.ExtensionContext) {
     statusKill,
     vscode.workspace.onDidChangeWorkspaceFolders(updateStatusBar)
   );
+
+  // Activity Bar + Tree View
+  registerAndroidView(context, output);
 
   const disposeLogcat = () => {
     if (currentLogcatDispose) {
