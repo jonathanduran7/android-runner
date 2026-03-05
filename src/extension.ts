@@ -5,11 +5,17 @@ import { getRunningEmulator } from "./adb.js";
 import { killEmulator, streamLogcat } from "./adb.js";
 import { listAvds } from "./emulator.js";
 import { listInstallTasks } from "./gradle.js";
-import { runAndStreamLogs } from "./runner.js";
+import { runAndStreamLogs, reinstallOnExistingEmulator } from "./runner.js";
 import { getSdkPath } from "./sdk.js";
 import { registerAndroidView } from "./androidView.js";
 
 const USE_EXISTING_EMULATOR = "__use_existing__";
+
+interface LastRunOptions {
+  projectRoot: string;
+  gradleTask: string;
+  appId: string;
+}
 
 function getConfig() {
   return vscode.workspace.getConfiguration("androidRunner");
@@ -67,6 +73,8 @@ export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Android Runner");
 
   let currentLogcatDispose: (() => void) | null = null;
+  let currentStopLogcat: (() => void) | null = null;
+  let lastRun: LastRunOptions | null = null;
 
   // Status bar: Run | Logs | Stop | Kill (higher priority = more to the left)
   const statusRun = vscode.window.createStatusBarItem(
@@ -101,6 +109,14 @@ export function activate(context: vscode.ExtensionContext) {
   statusKill.tooltip = "Android: Kill Emulator";
   statusKill.command = "androidRunner.killEmulator";
 
+  const statusReinstall = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    250
+  );
+  statusReinstall.text = "$(sync) Reinstall";
+  statusReinstall.tooltip = "Android: Reinstall Last APK";
+  statusReinstall.command = "androidRunner.reinstallLast";
+
   const updateStatusBar = () => {
     const visible = (vscode.workspace.workspaceFolders?.length ?? 0) > 0;
     if (visible) {
@@ -108,11 +124,13 @@ export function activate(context: vscode.ExtensionContext) {
       statusLogs.show();
       statusStop.show();
       statusKill.show();
+      statusReinstall.show();
     } else {
       statusRun.hide();
       statusLogs.hide();
       statusStop.hide();
       statusKill.hide();
+      statusReinstall.hide();
     }
   };
   updateStatusBar();
@@ -121,6 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
     statusLogs,
     statusStop,
     statusKill,
+    statusReinstall,
     vscode.workspace.onDidChangeWorkspaceFolders(updateStatusBar)
   );
 
@@ -132,6 +151,15 @@ export function activate(context: vscode.ExtensionContext) {
       currentLogcatDispose();
       currentLogcatDispose = null;
     }
+    currentStopLogcat = null;
+  };
+
+  const stopLogcatOnly = () => {
+    if (currentStopLogcat) {
+      currentStopLogcat();
+      currentStopLogcat = null;
+    }
+    currentLogcatDispose = null;
   };
 
   context.subscriptions.push(
@@ -226,6 +254,12 @@ export function activate(context: vscode.ExtensionContext) {
           return;
         }
 
+        lastRun = {
+          projectRoot,
+          gradleTask,
+          appId,
+        };
+
         disposeLogcat();
 
         const result = await runAndStreamLogs({
@@ -239,6 +273,7 @@ export function activate(context: vscode.ExtensionContext) {
         });
 
         currentLogcatDispose = result.logcatDispose;
+        currentStopLogcat = result.stopLogcat;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
@@ -259,6 +294,12 @@ export function activate(context: vscode.ExtensionContext) {
           config.get<Record<string, string>>("taskAppIds")?.installStaging ??
           "com.altwo.wallet.staging";
 
+        lastRun = {
+          projectRoot,
+          gradleTask: ":app:installStaging",
+          appId,
+        };
+
         disposeLogcat();
 
         const result = await runAndStreamLogs({
@@ -271,6 +312,7 @@ export function activate(context: vscode.ExtensionContext) {
           notify: createNotifier(),
         });
         currentLogcatDispose = result.logcatDispose;
+        currentStopLogcat = result.stopLogcat;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
@@ -366,6 +408,49 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("androidRunner.stopLogs", () => {
       disposeLogcat();
       vscode.window.showInformationMessage("Logcat stopped.");
+    }),
+
+    vscode.commands.registerCommand("androidRunner.reinstallLast", async () => {
+      try {
+        const run = lastRun;
+        if (!run) {
+          vscode.window.showErrorMessage(
+            "No previous run found. Use Android: Run & Stream Logs or Android: Run Staging first."
+          );
+          return;
+        }
+
+        const projectRoot = run.projectRoot;
+        checkGradlew(projectRoot);
+        checkSdk();
+
+        const deviceId = await getRunningEmulator();
+        if (!deviceId) {
+          vscode.window.showErrorMessage(
+            "No emulator running. Start an emulator or use Android: Run & Stream Logs."
+          );
+          return;
+        }
+
+        // Solo parar el logcat, NO matar el emulador
+        stopLogcatOnly();
+
+        const result = await reinstallOnExistingEmulator({
+          projectRoot,
+          deviceId,
+          gradleTask: run.gradleTask,
+          appId: run.appId,
+          output,
+          notify: createNotifier(),
+        });
+
+        currentLogcatDispose = result.logcatDispose;
+        currentStopLogcat = result.stopLogcat;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`Android Runner: ${msg}`);
+        output.appendLine(`[ERROR] ${msg}`);
+      }
     })
   );
 

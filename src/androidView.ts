@@ -112,6 +112,13 @@ export class AndroidTreeDataProvider
       },
       {
         kind: "action",
+        id: "reinstallLast",
+        label: "Reinstall Last APK",
+        icon: "sync",
+        command: "androidRunner.reinstallLast",
+      },
+      {
+        kind: "action",
         id: "logs",
         label: "Logs",
         icon: "output",
