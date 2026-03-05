@@ -82,17 +82,21 @@ export async function getAppPid(
 }
 
 /**
- * Launch app using monkey (for when app is installed but not running)
+ * Launch app and bring to foreground (am start with NEW_TASK, fallback to monkey)
  */
 export async function launchApp(
   deviceId: string,
   appId: string
 ): Promise<void> {
   const adb = getAdbPath();
-  await execAsync(
-    `"${adb}" -s "${deviceId}" shell monkey -p "${appId}" -c android.intent.category.LAUNCHER 1`,
-    { env: process.env, maxBuffer: 1024 }
-  ).catch(() => {});
+  // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED to bring launcher to front
+  const amStart = `"${adb}" -s "${deviceId}" shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "${appId}" -f 0x10800000`;
+  const monkey = `"${adb}" -s "${deviceId}" shell monkey -p "${appId}" -c android.intent.category.LAUNCHER 1`;
+  try {
+    await execAsync(amStart, { env: process.env, maxBuffer: 1024 });
+  } catch {
+    await execAsync(monkey, { env: process.env, maxBuffer: 1024 }).catch(() => {});
+  }
 }
 
 /**

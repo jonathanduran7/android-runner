@@ -67,9 +67,15 @@ export async function runAndStreamLogs(
   // 2. Run Gradle install
   await runGradleInstall(projectRoot, gradleTask, output);
 
-  // 3. Get app PID (launch with monkey if needed)
+  // 3. Wait for install to settle (broadcasts, etc.) then launch launcher activity
+  await new Promise((r) => setTimeout(r, 1500));
+  output.appendLine(`[INFO] Launching app ${appId}...`);
+  await launchApp(deviceId, appId);
+  await new Promise((r) => setTimeout(r, 3000));
+
+  // 4. Get app PID (retry launch if not running yet)
   let pid: string | null = null;
-  const maxAttempts = 10;
+  const maxAttempts = 5;
 
   for (let i = 1; i <= maxAttempts; i++) {
     pid = await getAppPid(deviceId, appId);
@@ -77,11 +83,15 @@ export async function runAndStreamLogs(
       output.appendLine(`[INFO] App PID: ${pid}`);
       break;
     }
-    output.appendLine(
-      `[INFO] App not running (attempt ${i}/${maxAttempts}), launching...`
-    );
+    output.appendLine(`[INFO] App not running yet (attempt ${i}/${maxAttempts}), retrying launch...`);
     await launchApp(deviceId, appId);
     await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  // 4b. Bring app to foreground (process may have started via broadcast; ensure launcher is visible)
+  if (pid) {
+    await launchApp(deviceId, appId);
+    await new Promise((r) => setTimeout(r, 500));
   }
 
   if (!pid) {
@@ -90,7 +100,7 @@ export async function runAndStreamLogs(
     );
   }
 
-  // 4. Stream logcat
+  // 5. Stream logcat
   const { dispose: logcatDispose } = streamLogcat(deviceId, output, pid);
 
   output.appendLine(
@@ -100,7 +110,7 @@ export async function runAndStreamLogs(
   );
   output.appendLine("");
 
-  // 5. Register cleanup
+  // 6. Register cleanup
   const cleanup = () => {
     logcatDispose();
     if (startedEmulator && !keepEmulator && deviceId.startsWith("emulator-")) {
