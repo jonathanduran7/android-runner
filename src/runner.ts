@@ -23,7 +23,88 @@ export interface RunOptions {
 export interface RunResult {
   deviceId: string;
   startedEmulator: boolean;
+  /** Stop logcat stream only, does NOT kill the emulator. */
+  stopLogcat: () => void;
+  /** Full cleanup: stop logcat + kill emulator if applicable. */
   logcatDispose: () => void;
+}
+
+interface InstallAndLogsOptions {
+  projectRoot: string;
+  deviceId: string;
+  gradleTask: string;
+  appId: string;
+  output: vscode.OutputChannel;
+  notify?: (message: string, type?: "info" | "warn") => void;
+}
+
+async function installOnDeviceAndStreamLogs(
+  options: InstallAndLogsOptions
+): Promise<RunResult> {
+  const { projectRoot, deviceId, gradleTask, appId, output, notify } = options;
+
+  // 1. Run Gradle install
+  await runGradleInstall(projectRoot, gradleTask, output);
+  notify?.("Install complete", "info");
+
+  // 2. Wait for install to settle (broadcasts, etc.) then launch launcher activity
+  await new Promise((r) => setTimeout(r, 1500));
+  output.appendLine(`[INFO] Launching app ${appId}...`);
+  await launchApp(deviceId, appId);
+  await new Promise((r) => setTimeout(r, 3000));
+
+  // 3. Get app PID (retry launch if not running yet)
+  let pid: string | null = null;
+  const maxAttempts = 5;
+
+  for (let i = 1; i <= maxAttempts; i++) {
+    pid = await getAppPid(deviceId, appId);
+    if (pid) {
+      output.appendLine(`[INFO] App PID: ${pid}`);
+      notify?.("App launched", "info");
+      break;
+    }
+    output.appendLine(
+      `[INFO] App not running yet (attempt ${i}/${maxAttempts}), retrying launch...`
+    );
+    await launchApp(deviceId, appId);
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  // Bring app to foreground if we have a PID
+  if (pid) {
+    await launchApp(deviceId, appId);
+    await new Promise((r) => setTimeout(r, 500));
+  }
+
+  if (!pid) {
+    output.appendLine(
+      "[WARN] Could not get app PID. Streaming full logcat (unfiltered)."
+    );
+    notify?.("App PID not found. Streaming full logcat.", "warn");
+  }
+
+  // 4. Stream logcat
+  const { dispose: logcatDisposeInner } = streamLogcat(deviceId, output, pid);
+
+  output.appendLine(
+    pid
+      ? `[INFO] Streaming logs (filtered by PID ${pid}). Press Stop or close to exit.`
+      : "[INFO] Streaming full logcat. Press Stop or close to exit."
+  );
+  output.appendLine("");
+  notify?.("Streaming logs. Use Android: Stop Logs to stop.", "info");
+
+  const stopLogcat = () => {
+    logcatDisposeInner();
+  };
+
+  return {
+    deviceId,
+    startedEmulator: false,
+    stopLogcat,
+    logcatDispose: stopLogcat,
+  };
 }
 
 /**
@@ -69,59 +150,21 @@ export async function runAndStreamLogs(
     );
   }
 
-  // 2. Run Gradle install
-  await runGradleInstall(projectRoot, gradleTask, output);
-  notify?.("Install complete", "info");
+  // 2. Install APK on selected device and stream logs
+  const innerResult = await installOnDeviceAndStreamLogs({
+    projectRoot,
+    deviceId,
+    gradleTask,
+    appId,
+    output,
+    notify,
+  });
 
-  // 3. Wait for install to settle (broadcasts, etc.) then launch launcher activity
-  await new Promise((r) => setTimeout(r, 1500));
-  output.appendLine(`[INFO] Launching app ${appId}...`);
-  await launchApp(deviceId, appId);
-  await new Promise((r) => setTimeout(r, 3000));
+  // 3. Register cleanup
+  const { stopLogcat } = innerResult;
 
-  // 4. Get app PID (retry launch if not running yet)
-  let pid: string | null = null;
-  const maxAttempts = 5;
-
-  for (let i = 1; i <= maxAttempts; i++) {
-    pid = await getAppPid(deviceId, appId);
-    if (pid) {
-      output.appendLine(`[INFO] App PID: ${pid}`);
-      notify?.("App launched", "info");
-      break;
-    }
-    output.appendLine(`[INFO] App not running yet (attempt ${i}/${maxAttempts}), retrying launch...`);
-    await launchApp(deviceId, appId);
-    await new Promise((r) => setTimeout(r, 2000));
-  }
-
-  // 4b. Bring app to foreground (process may have started via broadcast; ensure launcher is visible)
-  if (pid) {
-    await launchApp(deviceId, appId);
-    await new Promise((r) => setTimeout(r, 500));
-  }
-
-  if (!pid) {
-    output.appendLine(
-      "[WARN] Could not get app PID. Streaming full logcat (unfiltered)."
-    );
-    notify?.("App PID not found. Streaming full logcat.", "warn");
-  }
-
-  // 5. Stream logcat
-  const { dispose: logcatDispose } = streamLogcat(deviceId, output, pid);
-
-  output.appendLine(
-    pid
-      ? `[INFO] Streaming logs (filtered by PID ${pid}). Press Stop or close to exit.`
-      : "[INFO] Streaming full logcat. Press Stop or close to exit."
-  );
-  output.appendLine("");
-  notify?.("Streaming logs. Use Android: Stop Logs to stop.", "info");
-
-  // 6. Register cleanup
-  const cleanup = () => {
-    logcatDispose();
+  const fullCleanup = () => {
+    stopLogcat();
     if (startedEmulator && !keepEmulator && deviceId.startsWith("emulator-")) {
       output.appendLine(`[INFO] Killing emulator ${deviceId}`);
       killEmulator(deviceId).catch(() => {});
@@ -132,6 +175,32 @@ export async function runAndStreamLogs(
   return {
     deviceId,
     startedEmulator,
-    logcatDispose: cleanup,
+    stopLogcat,
+    logcatDispose: fullCleanup,
   };
+}
+
+/**
+ * Reinstall on an already running emulator.
+ * Does not start or stop the emulator; only reinstalls, launches, and streams logs.
+ */
+export async function reinstallOnExistingEmulator(
+  options: Omit<RunOptions, "avdName" | "keepEmulator"> & { deviceId: string }
+): Promise<RunResult> {
+  const { projectRoot, gradleTask, appId, output, notify, deviceId } = options;
+
+  output.show(true);
+  output.appendLine("[INFO] Android Runner - Reinstall on Existing Emulator");
+  output.appendLine("");
+  output.appendLine(`[INFO] Using existing emulator: ${deviceId}`);
+  notify?.("Using existing emulator", "info");
+
+  return installOnDeviceAndStreamLogs({
+    projectRoot,
+    deviceId,
+    gradleTask,
+    appId,
+    output,
+    notify,
+  });
 }
