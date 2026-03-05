@@ -82,21 +82,60 @@ export async function getAppPid(
 }
 
 /**
- * Launch app and bring to foreground (am start with NEW_TASK, fallback to monkey)
+ * Resolve the launcher activity component for a package (e.g. "com.example/.MainActivity").
+ * Returns null if not resolvable.
+ */
+async function resolveLauncherComponent(
+  adb: string,
+  deviceId: string,
+  appId: string
+): Promise<string | null> {
+  try {
+    const { stdout } = await execAsync(
+      `"${adb}" -s "${deviceId}" shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER ${appId}`,
+      { env: process.env, maxBuffer: 4096 }
+    );
+    // Output has a "priority" line first, then the component on the last non-empty line
+    const lines = stdout.trim().split("\n").map((l) => l.trim()).filter(Boolean);
+    const component = lines[lines.length - 1];
+    if (component && component.includes("/")) {
+      return component;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Launch app and bring to foreground.
+ * Strategy:
+ *   1. Resolve the exact launcher activity component via `cmd package resolve-activity`
+ *      and start it with `am start -n <component>` (most reliable).
+ *   2. Fall back to `monkey` if resolution fails.
  */
 export async function launchApp(
   deviceId: string,
   appId: string
 ): Promise<void> {
   const adb = getAdbPath();
-  // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_RESET_TASK_IF_NEEDED to bring launcher to front
-  const amStart = `"${adb}" -s "${deviceId}" shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p "${appId}" -f 0x10800000`;
-  const monkey = `"${adb}" -s "${deviceId}" shell monkey -p "${appId}" -c android.intent.category.LAUNCHER 1`;
-  try {
-    await execAsync(amStart, { env: process.env, maxBuffer: 1024 });
-  } catch {
-    await execAsync(monkey, { env: process.env, maxBuffer: 1024 }).catch(() => {});
+
+  const component = await resolveLauncherComponent(adb, deviceId, appId);
+
+  if (component) {
+    // FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TOP to bring launcher to front
+    await execAsync(
+      `"${adb}" -s "${deviceId}" shell am start -n "${component}" -f 0x10c00000`,
+      { env: process.env, maxBuffer: 1024 }
+    ).catch(() => {});
+    return;
   }
+
+  // Fallback: monkey is reliable for opening the default launcher activity
+  await execAsync(
+    `"${adb}" -s "${deviceId}" shell monkey -p "${appId}" -c android.intent.category.LAUNCHER 1`,
+    { env: process.env, maxBuffer: 1024 }
+  ).catch(() => {});
 }
 
 /**
