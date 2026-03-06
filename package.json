@@ -124,11 +124,8 @@
         "androidRunner.taskAppIds": {
           "type": "object",
           "additionalProperties": { "type": "string" },
-          "default": {
-            "installStaging": "com.altwo.wallet.staging",
-            "installDebug": "com.altwo.wallet.debug"
-          },
-          "description": "Map Gradle install task suffix to applicationId (e.g. installStaging -> com.example.staging)"
+          "default": {},
+          "description": "Override applicationId per Gradle install task suffix (e.g. {\"installStaging\": \"com.example.app.staging\"}). If empty, the extension auto-detects the applicationId from app/build.gradle."
         },
         "androidRunner.notifications": {
           "type": "boolean",

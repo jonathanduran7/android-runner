@@ -1,5 +1,6 @@
 import { exec, spawn } from "child_process";
 import { promisify } from "util";
+import * as fs from "fs";
 import * as vscode from "vscode";
 import * as path from "path";
 
@@ -22,25 +23,98 @@ export async function listInstallTasks(projectRoot: string): Promise<string[]> {
   const tasks: string[] = [];
   const seen = new Set<string>();
 
-  // Match installXxx (Xxx = flavor: Debug, Staging, Release, etc.)
-  const regex = /:app:install([A-Za-z][A-Za-z0-9]*)|\binstall([A-Z][A-Za-z0-9]*)/g;
+  // Match lines where the task name starts at the beginning (with optional :app: prefix).
+  // Excludes instrumented test tasks (AndroidTest) and unit test tasks (UnitTest).
+  const lineRegex = /^(?::app:)?(install([A-Z][A-Za-z0-9]*))(?:\s+-\s+|\s*$)/;
+  const testSuffixes = ["AndroidTest", "UnitTest"];
 
   for (const line of stdout.split("\n")) {
-    let m: RegExpExecArray | null;
-    regex.lastIndex = 0;
-    while ((m = regex.exec(line)) !== null) {
-      const flavor = m[1] || m[2];
-      if (flavor) {
-        const task = `:app:install${flavor}`;
-        if (!seen.has(task)) {
-          seen.add(task);
-          tasks.push(task);
-        }
-      }
+    const trimmed = line.trimStart();
+    const m = lineRegex.exec(trimmed);
+    if (!m) {
+      continue;
+    }
+    const suffix = m[2];
+    if (testSuffixes.some((s) => suffix.endsWith(s))) {
+      continue;
+    }
+    const task = `:app:install${suffix}`;
+    if (!seen.has(task)) {
+      seen.add(task);
+      tasks.push(task);
     }
   }
 
   return tasks.sort();
+}
+
+/**
+ * Extract the content between matching braces for a named block (e.g. "defaultConfig {…}").
+ * Handles nested braces correctly.
+ */
+function extractGradleBlock(content: string, blockName: string): string {
+  const pattern = new RegExp(`\\b${blockName}\\s*\\{`);
+  const match = pattern.exec(content);
+  if (!match) {
+    return "";
+  }
+  const braceStart = content.indexOf("{", match.index);
+  let depth = 0;
+  for (let i = braceStart; i < content.length; i++) {
+    if (content[i] === "{") {
+      depth++;
+    } else if (content[i] === "}") {
+      depth--;
+      if (depth === 0) {
+        return content.slice(braceStart + 1, i);
+      }
+    }
+  }
+  return "";
+}
+
+/**
+ * Auto-detect the applicationId for a given install task suffix (e.g. "Debug", "Staging")
+ * by parsing app/build.gradle or app/build.gradle.kts in the project root.
+ *
+ * Returns null if the file cannot be found or parsed.
+ */
+export function detectAppIdSync(projectRoot: string, taskSuffix: string): string | null {
+  const candidates = [
+    path.join(projectRoot, "app", "build.gradle"),
+    path.join(projectRoot, "app", "build.gradle.kts"),
+  ];
+
+  let content = "";
+  for (const f of candidates) {
+    try {
+      content = fs.readFileSync(f, "utf8");
+      break;
+    } catch {
+      continue;
+    }
+  }
+
+  if (!content) {
+    return null;
+  }
+
+  // Extract base applicationId from defaultConfig block
+  const defaultConfigBlock = extractGradleBlock(content, "defaultConfig");
+  const baseIdMatch = defaultConfigBlock.match(/applicationId\s*[=]?\s*["']([^"']+)["']/);
+  if (!baseIdMatch) {
+    return null;
+  }
+  const baseId = baseIdMatch[1];
+
+  // Look for applicationIdSuffix in the matching build type block
+  // e.g. taskSuffix "Staging" -> block name "staging"
+  const buildTypeName = taskSuffix.charAt(0).toLowerCase() + taskSuffix.slice(1);
+  const buildTypesBlock = extractGradleBlock(content, "buildTypes");
+  const buildTypeBlock = extractGradleBlock(buildTypesBlock, buildTypeName);
+  const suffixMatch = buildTypeBlock.match(/applicationIdSuffix\s*[=]?\s*["']([^"']+)["']/);
+
+  return suffixMatch ? baseId + suffixMatch[1] : baseId;
 }
 
 /**

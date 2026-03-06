@@ -4,7 +4,7 @@ import * as vscode from "vscode";
 import { getRunningEmulator, getPhysicalDevices } from "./adb.js";
 import { killEmulator, streamLogcat } from "./adb.js";
 import { listAvds } from "./emulator.js";
-import { listInstallTasks } from "./gradle.js";
+import { listInstallTasks, detectAppIdSync } from "./gradle.js";
 import { runAndStreamLogs, reinstallOnExistingEmulator } from "./runner.js";
 import { getSdkPath } from "./sdk.js";
 import { registerAndroidView } from "./androidView.js";
@@ -23,13 +23,24 @@ function getConfig() {
   return vscode.workspace.getConfiguration("androidRunner");
 }
 
-function getAppIdForTask(task: string): string | undefined {
+function getAppIdForTask(task: string, projectRoot?: string): string | undefined {
   const config = getConfig();
   const mapping = config.get<Record<string, string>>("taskAppIds") ?? {};
   // task is :app:installStaging -> extract installStaging
   const match = task.match(/:app:install([A-Za-z][A-Za-z0-9]*)/);
   const key = match ? `install${match[1]}` : undefined;
-  return key ? mapping[key] : undefined;
+  const configured = key ? mapping[key] : undefined;
+
+  if (configured) {
+    return configured;
+  }
+
+  // Fall back to auto-detection from app/build.gradle
+  if (projectRoot && match) {
+    return detectAppIdSync(projectRoot, match[1]) ?? undefined;
+  }
+
+  return undefined;
 }
 
 function ensureWorkspace(): string {
@@ -222,7 +233,7 @@ export function activate(context: vscode.ExtensionContext) {
           const taskPick = await vscode.window.showQuickPick(
             tasks.map((t) => ({
               label: t,
-              description: getAppIdForTask(t) ?? "(configure appId in settings)",
+              description: getAppIdForTask(t, projectRoot) ?? "(auto-detect from build.gradle)",
             })),
             {
               title: "Select install task",
@@ -235,11 +246,11 @@ export function activate(context: vscode.ExtensionContext) {
           }
 
           const gradleTask = taskPick.label;
-          const appId = getAppIdForTask(gradleTask);
+          const appId = getAppIdForTask(gradleTask, projectRoot);
 
           if (!appId) {
             vscode.window.showErrorMessage(
-              `No applicationId configured for ${gradleTask}. Add "androidRunner.taskAppIds" in settings, e.g. {"installStaging": "com.example.app.staging"}.`
+              `Could not detect applicationId for ${gradleTask}. Add "androidRunner.taskAppIds" in settings, e.g. {"installDebug": "com.example.app.debug"}.`
             );
             return;
           }
@@ -298,7 +309,7 @@ export function activate(context: vscode.ExtensionContext) {
         const taskPick = await vscode.window.showQuickPick(
           tasks.map((t) => ({
             label: t,
-            description: getAppIdForTask(t) ?? "(configure appId in settings)",
+            description: getAppIdForTask(t, projectRoot) ?? "(auto-detect from build.gradle)",
           })),
           {
             title: "Select install task",
@@ -311,11 +322,11 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const gradleTask = taskPick.label;
-        const appId = getAppIdForTask(gradleTask);
+        const appId = getAppIdForTask(gradleTask, projectRoot);
 
         if (!appId) {
           vscode.window.showErrorMessage(
-            `No applicationId configured for ${gradleTask}. Add "androidRunner.taskAppIds" in settings, e.g. {"installStaging": "com.example.app.staging"}.`
+            `Could not detect applicationId for ${gradleTask}. Add "androidRunner.taskAppIds" in settings, e.g. {"installDebug": "com.example.app.debug"}.`
           );
           return;
         }
