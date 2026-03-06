@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { getRunningEmulator } from "./adb.js";
+import { getRunningEmulator, getPhysicalDevices } from "./adb.js";
 import { listAvds } from "./emulator.js";
 import { listInstallTasks } from "./gradle.js";
 import * as path from "path";
@@ -11,6 +11,7 @@ export type TreeNode =
   | { kind: "action"; id: string; label: string; icon: string; command: string }
   | { kind: "folder"; id: string; label: string; icon: string }
   | { kind: "emulator"; name: string; running: boolean }
+  | { kind: "device"; id: string; model: string }
   | { kind: "flavor"; task: string };
 
 function getProjectRoot(): string | null {
@@ -71,6 +72,14 @@ export class AndroidTreeDataProvider
       return item;
     }
 
+    if (element.kind === "device") {
+      const item = new vscode.TreeItem(element.model, vscode.TreeItemCollapsibleState.None);
+      item.iconPath = new vscode.ThemeIcon("plug");
+      item.description = element.id;
+      item.tooltip = `${element.model} (${element.id})`;
+      return item;
+    }
+
     if (element.kind === "flavor") {
       const item = new vscode.TreeItem(
         element.task.replace(/^:app:/, ""),
@@ -92,6 +101,9 @@ export class AndroidTreeDataProvider
     if (element.kind === "folder") {
       if (element.id === "emulators") {
         return this.getEmulatorChildren();
+      }
+      if (element.id === "devices") {
+        return this.getPhysicalDeviceChildren();
       }
       if (element.id === "flavors") {
         return this.getFlavorChildren();
@@ -147,6 +159,12 @@ export class AndroidTreeDataProvider
       },
       {
         kind: "folder",
+        id: "devices",
+        label: "Devices",
+        icon: "plug",
+      },
+      {
+        kind: "folder",
         id: "emulators",
         label: "Emulators",
         icon: "device-mobile",
@@ -159,6 +177,22 @@ export class AndroidTreeDataProvider
       },
     ];
     return actions;
+  }
+
+  private async getPhysicalDeviceChildren(): Promise<TreeNode[]> {
+    try {
+      const devices = await getPhysicalDevices();
+      if (devices.length === 0) {
+        return [{ kind: "device", id: "", model: "No devices connected" }];
+      }
+      return devices.map((d) => ({
+        kind: "device" as const,
+        id: d.id,
+        model: d.model ?? d.id,
+      }));
+    } catch {
+      return [{ kind: "device", id: "", model: "Could not detect devices" }];
+    }
   }
 
   private async getEmulatorChildren(): Promise<TreeNode[]> {

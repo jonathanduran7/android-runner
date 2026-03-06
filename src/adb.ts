@@ -8,6 +8,7 @@ const execAsync = promisify(exec);
 export interface AdbDevice {
   id: string;
   isEmulator: boolean;
+  model?: string;
 }
 
 /**
@@ -30,10 +31,13 @@ export async function getDevices(): Promise<AdbDevice[]> {
     }
 
     const id = trimmed.split(/\s+/)[0];
+    const modelMatch = trimmed.match(/model:(\S+)/);
+    const model = modelMatch ? modelMatch[1].replace(/_/g, " ") : undefined;
     if (id && id !== "List") {
       devices.push({
         id,
         isEmulator: id.startsWith("emulator-"),
+        model,
       });
     }
   }
@@ -48,6 +52,14 @@ export async function getRunningEmulator(): Promise<string | null> {
   const devices = await getDevices();
   const emu = devices.find((d) => d.isEmulator);
   return emu ? emu.id : null;
+}
+
+/**
+ * Get all connected physical (non-emulator) devices
+ */
+export async function getPhysicalDevices(): Promise<AdbDevice[]> {
+  const devices = await getDevices();
+  return devices.filter((d) => !d.isEmulator);
 }
 
 /**

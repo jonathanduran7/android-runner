@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as vscode from "vscode";
-import { getRunningEmulator } from "./adb.js";
+import { getRunningEmulator, getPhysicalDevices } from "./adb.js";
 import { killEmulator, streamLogcat } from "./adb.js";
 import { listAvds } from "./emulator.js";
 import { listInstallTasks } from "./gradle.js";
@@ -11,6 +11,7 @@ import { registerAndroidView } from "./androidView.js";
 import { registerNetworkView } from "./networkLog.js";
 
 const USE_EXISTING_EMULATOR = "__use_existing__";
+const PHYSICAL_DEVICE_PREFIX = "__physical__:";
 
 interface LastRunOptions {
   projectRoot: string;
@@ -177,14 +178,19 @@ export function activate(context: vscode.ExtensionContext) {
         const defaultAvd = config.get<string>("defaultAvd") ?? "";
         const keepEmulator = config.get<boolean>("keepEmulator") ?? false;
 
-        // QuickPick 1: AVD
-        const avds = await listAvds();
+        // QuickPick 1: AVD / physical device
+        const [avds, physicalDevices] = await Promise.all([listAvds(), getPhysicalDevices()]);
         const avdItems: vscode.QuickPickItem[] = [
           {
             label: "$(device-mobile) Use running emulator",
             description: "Skip starting a new emulator",
             detail: USE_EXISTING_EMULATOR,
           },
+          ...physicalDevices.map((d) => ({
+            label: `$(plug) ${d.model ?? d.id}`,
+            description: d.id,
+            detail: PHYSICAL_DEVICE_PREFIX + d.id,
+          })),
           ...avds.map((name) => ({
             label: name,
             description: name === defaultAvd ? "Default" : undefined,
@@ -192,11 +198,67 @@ export function activate(context: vscode.ExtensionContext) {
         ];
 
         const avdPick = await vscode.window.showQuickPick(avdItems, {
-          title: "Select AVD",
-          placeHolder: "Choose an emulator",
+          title: "Select device or AVD",
+          placeHolder: "Choose a physical device or emulator",
         });
 
         if (!avdPick) {
+          return;
+        }
+
+        // Physical device selected — run directly on it
+        if (avdPick.detail?.startsWith(PHYSICAL_DEVICE_PREFIX)) {
+          const physicalDeviceId = avdPick.detail.slice(PHYSICAL_DEVICE_PREFIX.length);
+
+          // QuickPick 2: Install task
+          const tasks = await listInstallTasks(projectRoot);
+          if (tasks.length === 0) {
+            vscode.window.showErrorMessage(
+              "No install tasks found. Run ./gradlew :app:tasks --all to verify."
+            );
+            return;
+          }
+
+          const taskPick = await vscode.window.showQuickPick(
+            tasks.map((t) => ({
+              label: t,
+              description: getAppIdForTask(t) ?? "(configure appId in settings)",
+            })),
+            {
+              title: "Select install task",
+              placeHolder: "Choose a Gradle install task",
+            }
+          );
+
+          if (!taskPick) {
+            return;
+          }
+
+          const gradleTask = taskPick.label;
+          const appId = getAppIdForTask(gradleTask);
+
+          if (!appId) {
+            vscode.window.showErrorMessage(
+              `No applicationId configured for ${gradleTask}. Add "androidRunner.taskAppIds" in settings, e.g. {"installStaging": "com.example.app.staging"}.`
+            );
+            return;
+          }
+
+          lastRun = { projectRoot, gradleTask, appId };
+          disposeLogcat();
+
+          const result = await reinstallOnExistingEmulator({
+            projectRoot,
+            deviceId: physicalDeviceId,
+            gradleTask,
+            appId,
+            output,
+            notify: createNotifier(),
+            onHttpLine: (line) => networkParser.processLine(line),
+          });
+
+          currentLogcatDispose = result.logcatDispose;
+          currentStopLogcat = result.stopLogcat;
           return;
         }
 
