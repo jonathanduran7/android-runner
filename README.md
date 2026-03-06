@@ -4,6 +4,65 @@ A VS Code / Cursor extension that integrates the full Android build-and-run work
 
 ---
 
+## Features
+
+- **One-command run flow** — pick a device, pick a build variant, and the extension handles the rest: emulator start, Gradle install, app launch, and logcat — all in sequence.
+- **Physical device support** — automatically detects USB-connected phones via `adb`. They appear in the sidebar and in the device picker alongside emulators.
+- **Emulator management** — lists all configured AVDs, shows which one is currently running, starts on demand, and optionally kills it when you stop the session.
+- **Gradle variant picker** — scans your project's Gradle tasks automatically and shows all available `installXxx` variants (Debug, Staging, Release, etc.) without any manual configuration.
+- **Filtered logcat** — resolves the app's PID after install and streams only its log lines, eliminating noise from other processes.
+- **Network inspector** — intercepts OkHttp traffic directly from logcat without any instrumentation. Displays each HTTP transaction in a dedicated sidebar panel with status code, method, path, duration, and color-coded icons. Full request/response details (headers + pretty-printed JSON body) available on click.
+- **Reinstall shortcut** — re-runs the last Gradle task and restarts logcat on the current device in one click, without restarting the emulator.
+- **Status bar integration** — Run, Logs, Stop, Reinstall, and Kill buttons always visible at the bottom of the editor when a workspace is open.
+- **Sidebar panel** — Activity Bar panel with sections for Devices (physical), Emulators (AVDs), and Flavors (Gradle tasks), all expandable and refreshable.
+
+---
+
+## How it works
+
+### Run & Stream Logs flow
+
+```
+Android: Run & Stream Logs
+         │
+         ├─ 1. Detect connected physical devices  (adb devices -l)
+         ├─ 2. List configured AVDs               (emulator -list-avds)
+         │      └─ QuickPick: choose physical device, running emulator, or AVD
+         │
+         ├─ 3. List Gradle install tasks           (./gradlew :app:tasks --all)
+         │      └─ QuickPick: choose build variant (Debug / Staging / Release …)
+         │
+         ├─ 4. Start emulator if an AVD was chosen (emulator -avd <name>)
+         │      └─ Poll adb every 5 s until device appears (up to 5 min)
+         │
+         ├─ 5. Run Gradle install                  (./gradlew <task>)
+         │
+         ├─ 6. Launch the app                      (adb shell am start -n <component>)
+         │      └─ Retries up to 5× with 2 s delay if the app is not running yet
+         │
+         ├─ 7. Resolve app PID                     (adb shell pidof <package>)
+         │
+         └─ 8. Stream logcat filtered by PID       (adb logcat)
+                └─ OkHttp lines → Network inspector panel
+```
+
+### SDK and device detection
+
+The extension resolves the Android SDK path in the following order:
+
+1. `androidRunner.sdkPath` setting
+2. `ANDROID_HOME` environment variable
+3. `ANDROID_SDK_ROOT` environment variable
+4. Common OS paths (`~/Library/Android/sdk` on macOS, `%LOCALAPPDATA%\Android\Sdk` on Windows)
+
+Physical devices are detected by running `adb devices -l` and filtering out `emulator-XXXX` entries. The model name is parsed from the `model:` field in the output.
+
+### Network interception
+
+The extension hooks into the logcat stream looking for lines tagged `okhttp.OkHttpClient:`. It parses request/response pairs using the thread ID (TID) as the correlation key — no changes to your app code are required. Transactions are displayed in the **Network** sidebar panel and printed in full to the **Android Network** output channel when selected.
+
+---
+
 ## Requirements
 
 - **Android SDK** installed (Android Studio is the easiest way to get it)
