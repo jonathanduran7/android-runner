@@ -1,7 +1,7 @@
 {
   "name": "android-runner",
-  "displayName": "android-runner",
-  "description": "",
+  "displayName": "Android Runner",
+  "description": "Build, install and debug Android apps from VS Code: launch emulators, install APKs via Gradle, stream filtered logcat, and inspect OkHttp network traffic.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.105.1"
@@ -33,16 +33,66 @@
       ]
     },
     "commands": [
-      { "command": "androidRunner.runAndLogs", "title": "Android: Run & Stream Logs" },
-      { "command": "androidRunner.runStaging", "title": "Android: Run Staging" },
-      { "command": "androidRunner.reinstallLast", "title": "Android: Reinstall Last APK" },
-      { "command": "androidRunner.logs", "title": "Android: Logs" },
-      { "command": "androidRunner.killEmulator", "title": "Android: Kill Emulator" },
-      { "command": "androidRunner.stopLogs", "title": "Android: Stop Logs" },
-      { "command": "androidRunner.focusLogs", "title": "Android: Focus Logs" },
-      { "command": "androidRunner.refreshView", "title": "Android Runner: Refresh" },
-      { "command": "androidRunner.clearNetworkLog", "title": "Android: Clear Network Log", "icon": "$(clear-all)" },
-      { "command": "androidRunner.showNetworkTransaction", "title": "Android: Show Network Transaction" }
+      {
+        "command": "androidRunner.runAndLogs",
+        "category": "Android",
+        "title": "Run & Stream Logs",
+        "icon": "$(play)"
+      },
+      {
+        "command": "androidRunner.runStaging",
+        "category": "Android",
+        "title": "Run Staging",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "androidRunner.reinstallLast",
+        "category": "Android",
+        "title": "Reinstall Last APK",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "androidRunner.logs",
+        "category": "Android",
+        "title": "Logs",
+        "icon": "$(output)"
+      },
+      {
+        "command": "androidRunner.stopLogs",
+        "category": "Android",
+        "title": "Stop Logs",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "androidRunner.killEmulator",
+        "category": "Android",
+        "title": "Kill Emulator",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "androidRunner.focusLogs",
+        "category": "Android",
+        "title": "Focus Logs",
+        "icon": "$(output-view-icon)"
+      },
+      {
+        "command": "androidRunner.refreshView",
+        "category": "Android Runner",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "androidRunner.clearNetworkLog",
+        "category": "Android",
+        "title": "Clear Network Log",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "androidRunner.showNetworkTransaction",
+        "category": "Android",
+        "title": "Show Network Transaction",
+        "icon": "$(search)"
+      }
     ],
     "menus": {
       "view/title": [
