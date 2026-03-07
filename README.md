@@ -22,11 +22,11 @@ A VS Code / Cursor extension that integrates the full Android build-and-run work
 
 ### Run & Stream Logs
 
-![Run & Stream Logs](resources/run-apps.gif)
+![Run & Stream Logs](https://raw.githubusercontent.com/jonathanduran7/android-runner/main/resources/run-apps.gif)
 
 ### Network Inspector
 
-![Network Inspector](resources/network.gif)
+![Network Inspector](https://raw.githubusercontent.com/jonathanduran7/android-runner/main/resources/network.gif)
 
 ---
 
