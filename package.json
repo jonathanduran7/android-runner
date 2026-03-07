@@ -3,7 +3,7 @@
   "displayName": "Android Runner",
   "description": "Build, install and debug Android apps from VS Code: launch emulators, install APKs via Gradle, stream filtered logcat, and inspect OkHttp network traffic.",
   "version": "0.0.1",
-  "publisher": "jonathanduran7",
+  "publisher": "jonathan-duran-7",
   "engines": {
     "vscode": "^1.105.1"
   },
