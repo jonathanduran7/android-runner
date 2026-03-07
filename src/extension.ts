@@ -13,6 +13,22 @@ import { registerNetworkView } from "./networkLog.js";
 const USE_EXISTING_EMULATOR = "__use_existing__";
 const PHYSICAL_DEVICE_PREFIX = "__physical__:";
 
+/**
+ * Registers a command safely, ignoring "already exists" errors that can occur
+ * when the extension is both installed and running in development mode simultaneously.
+ */
+function safeRegisterCommand(
+  context: vscode.ExtensionContext,
+  command: string,
+  callback: (...args: unknown[]) => unknown
+): void {
+  try {
+    context.subscriptions.push(vscode.commands.registerCommand(command, callback));
+  } catch {
+    // Command already registered — extension was activated twice (e.g. installed + dev mode).
+  }
+}
+
 interface LastRunOptions {
   projectRoot: string;
   gradleTask: string;
@@ -178,8 +194,7 @@ export function activate(context: vscode.ExtensionContext) {
     currentLogcatDispose = null;
   };
 
-  context.subscriptions.push(
-    vscode.commands.registerCommand("androidRunner.runAndLogs", async () => {
+  safeRegisterCommand(context, "androidRunner.runAndLogs", async () => {
       try {
         const projectRoot = ensureWorkspace();
         checkGradlew(projectRoot);
@@ -357,9 +372,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
         output.appendLine(`[ERROR] ${msg}`);
       }
-    }),
+  });
 
-    vscode.commands.registerCommand("androidRunner.runStaging", async () => {
+  safeRegisterCommand(context, "androidRunner.runStaging", async () => {
       try {
         const projectRoot = ensureWorkspace();
         checkGradlew(projectRoot);
@@ -397,9 +412,9 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
         output.appendLine(`[ERROR] ${msg}`);
       }
-    }),
+  });
 
-    vscode.commands.registerCommand("androidRunner.logs", async () => {
+  safeRegisterCommand(context, "androidRunner.logs", async () => {
       try {
         checkSdk();
         const deviceId = await getRunningEmulator();
@@ -459,9 +474,9 @@ export function activate(context: vscode.ExtensionContext) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
       }
-    }),
+  });
 
-    vscode.commands.registerCommand("androidRunner.killEmulator", async () => {
+  safeRegisterCommand(context, "androidRunner.killEmulator", async () => {
       try {
         checkSdk();
         const deviceId = await getRunningEmulator();
@@ -482,14 +497,14 @@ export function activate(context: vscode.ExtensionContext) {
         const msg = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
       }
-    }),
+  });
 
-    vscode.commands.registerCommand("androidRunner.stopLogs", () => {
-      disposeLogcat();
-      vscode.window.showInformationMessage("Logcat stopped.");
-    }),
+  safeRegisterCommand(context, "androidRunner.stopLogs", () => {
+    disposeLogcat();
+    vscode.window.showInformationMessage("Logcat stopped.");
+  });
 
-    vscode.commands.registerCommand("androidRunner.reinstallLast", async () => {
+  safeRegisterCommand(context, "androidRunner.reinstallLast", async () => {
       try {
         const run = lastRun;
         if (!run) {
@@ -531,8 +546,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showErrorMessage(`Android Runner: ${msg}`);
         output.appendLine(`[ERROR] ${msg}`);
       }
-    })
-  );
+  });
 
   context.subscriptions.push({
     dispose: disposeLogcat,

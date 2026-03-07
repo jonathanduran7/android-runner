@@ -282,15 +282,27 @@ export function registerAndroidView(
 ): AndroidTreeDataProvider {
   const provider = new AndroidTreeDataProvider();
 
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider(VIEW_ID, provider),
-    vscode.commands.registerCommand("androidRunner.refreshView", () => {
-      provider.refresh();
-    }),
-    vscode.commands.registerCommand("androidRunner.focusLogs", () => {
-      outputChannel.show(true);
-    })
-  );
+  try {
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider(VIEW_ID, provider)
+    );
+  } catch { /* already registered */ }
+
+  try {
+    context.subscriptions.push(
+      vscode.commands.registerCommand("androidRunner.refreshView", () => {
+        provider.refresh();
+      })
+    );
+  } catch { /* already registered */ }
+
+  try {
+    context.subscriptions.push(
+      vscode.commands.registerCommand("androidRunner.focusLogs", () => {
+        outputChannel.show(true);
+      })
+    );
+  } catch { /* already registered */ }
 
   return provider;
 }

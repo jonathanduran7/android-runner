@@ -173,14 +173,21 @@ export function streamLogcat(
   onHttpLine?: (line: string) => void
 ): { child: ReturnType<typeof spawn>; dispose: () => void } {
   const adb = getAdbPath();
-  const args = ["-s", deviceId, "logcat"];
+  // -v threadtime ensures a consistent "MM-DD HH:MM:SS.mmm PID TID LEVEL TAG: msg" format
+  // across all Android/adb versions, which is required by the OkHttp regex parser.
+  const args = ["-s", deviceId, "logcat", "-v", "threadtime"];
   const child = spawn(adb, args, {
     env: process.env,
   });
 
+  // Buffer partial lines across data events (stream chunks don't guarantee line boundaries).
+  let lineBuffer = "";
+
   const onData = (data: Buffer | string) => {
-    const text = data.toString();
+    const text = lineBuffer + data.toString();
     const lines = text.split("\n");
+    // Last element may be an incomplete line — keep it buffered.
+    lineBuffer = lines.pop() ?? "";
 
     for (const line of lines) {
       // Feed OkHttp lines to the network parser regardless of PID filter

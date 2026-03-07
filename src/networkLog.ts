@@ -14,13 +14,14 @@ export interface HttpTransaction {
   complete: boolean;
 }
 
-// Matches a full logcat line from okhttp.OkHttpClient
-// Format: MM-DD HH:MM:SS.mmm PID TID LEVEL okhttp.OkHttpClient: message
+// Matches a full logcat line from okhttp.OkHttpClient.
+// Flexible to handle variations: MM-DD or YYYY-MM-DD timestamps, optional timezone offset,
+// variable spacing. Format: [date] [time][tz?] PID TID LEVEL okhttp.OkHttpClient: message
 const OKHTTP_LINE_RE =
-  /^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+\s+\d+\s+(\d+)\s+\w+\s+okhttp\.OkHttpClient:\s+(.*)$/;
+  /^[\d-]+\s+[\d:.]+\S*\s+\d+\s+(\d+)\s+\w+\s+okhttp\.OkHttpClient:\s+(.*)$/;
 
-// <-- 200 https://host/path (521ms)
-const RESPONSE_START_RE = /^<--\s+(\d+)\s+(https?:\/\/\S+)\s+\((\d+)ms\)/;
+// <-- 200 OK https://host/path (521ms)  — reason phrase (OK, Not Found, etc.) is optional
+const RESPONSE_START_RE = /^<--\s+(\d+)\s+.*?(https?:\/\/\S+)\s+\((\d+)ms\)/;
 
 // --> GET https://host/path
 const REQUEST_START_RE = /^-->\s+(\w+)\s+(https?:\/\/\S+)/;
@@ -43,6 +44,7 @@ type PendingTx = {
 };
 
 const MAX_TRANSACTIONS = 100;
+const MAX_DIAG_LINES = 3;
 
 /**
  * Parses OkHttp logcat lines and assembles complete HttpTransaction objects.
@@ -51,15 +53,31 @@ const MAX_TRANSACTIONS = 100;
 export class OkHttpParser {
   private pending = new Map<string, PendingTx>();
   private counter = 0;
+  private diagCount = 0;
+  private everMatched = false;
 
   constructor(
-    private readonly onComplete: (tx: HttpTransaction) => void
+    private readonly onComplete: (tx: HttpTransaction) => void,
+    private readonly diagnosticOutput?: vscode.OutputChannel
   ) {}
 
   processLine(rawLogcatLine: string): void {
     const m = OKHTTP_LINE_RE.exec(rawLogcatLine);
     if (!m) {
+      // Line passed the "okhttp.OkHttpClient:" filter in adb.ts but doesn't match
+      // the expected logcat format — likely a different timestamp layout.
+      if (this.diagnosticOutput && this.diagCount < MAX_DIAG_LINES) {
+        this.diagCount++;
+        this.diagnosticOutput.appendLine(
+          `[NETWORK] Format mismatch (line ${this.diagCount}/${MAX_DIAG_LINES}): ${rawLogcatLine.slice(0, 300)}`
+        );
+      }
       return;
+    }
+
+    if (!this.everMatched) {
+      this.everMatched = true;
+      this.diagnosticOutput?.appendLine("[NETWORK] OkHttp traffic detected — monitoring active.");
     }
 
     const tid = m[1];
@@ -146,6 +164,8 @@ export class OkHttpParser {
   reset(): void {
     this.pending.clear();
     this.counter = 0;
+    this.diagCount = 0;
+    this.everMatched = false;
   }
 }
 
@@ -338,25 +358,35 @@ export function registerNetworkView(
   const parser = new OkHttpParser((tx) => {
     printTransaction(tx, networkOutput);
     provider.addTransaction(tx);
-  });
+  }, networkOutput);
 
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("androidNetworkView", provider),
+  try {
+    context.subscriptions.push(
+      vscode.window.registerTreeDataProvider("androidNetworkView", provider)
+    );
+  } catch { /* already registered */ }
 
-    vscode.commands.registerCommand("androidRunner.clearNetworkLog", () => {
-      provider.clear();
-      parser.reset();
-      networkOutput.clear();
-    }),
+  try {
+    context.subscriptions.push(
+      vscode.commands.registerCommand("androidRunner.clearNetworkLog", () => {
+        provider.clear();
+        parser.reset();
+        networkOutput.clear();
+      })
+    );
+  } catch { /* already registered */ }
 
-    vscode.commands.registerCommand(
-      "androidRunner.showNetworkTransaction",
-      (tx: HttpTransaction) => {
-        networkOutput.show(true);
-        printTransaction(tx, networkOutput);
-      }
-    )
-  );
+  try {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        "androidRunner.showNetworkTransaction",
+        (tx: HttpTransaction) => {
+          networkOutput.show(true);
+          printTransaction(tx, networkOutput);
+        }
+      )
+    );
+  } catch { /* already registered */ }
 
   return { provider, parser };
 }

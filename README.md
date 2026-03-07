@@ -18,6 +18,18 @@ A VS Code / Cursor extension that integrates the full Android build-and-run work
 
 ---
 
+## Demo
+
+### Run & Stream Logs
+
+![Run & Stream Logs](resources/run-apps.gif)
+
+### Network Inspector
+
+![Network Inspector](resources/network.gif)
+
+---
+
 ## How it works
 
 ### Run & Stream Logs flow
