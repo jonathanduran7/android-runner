@@ -2,7 +2,7 @@
   "name": "android-runner",
   "displayName": "Android Runner",
   "description": "Build, install and debug Android apps from VS Code: launch emulators, install APKs via Gradle, stream filtered logcat, and inspect OkHttp network traffic.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "jonathan-duran-7",
   "repository": {
     "type": "git",

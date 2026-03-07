@@ -106,7 +106,14 @@ export function activate(context: vscode.ExtensionContext) {
   let currentStopLogcat: (() => void) | null = null;
   let lastRun: LastRunOptions | null = null;
 
-  const { parser: networkParser } = registerNetworkView(context, networkOutput);
+  const { parser: networkParser, clearNetworkLog } = registerNetworkView(
+    context,
+    networkOutput
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => clearNetworkLog())
+  );
 
   // Status bar: Run | Logs | Stop | Kill (higher priority = more to the left)
   const statusRun = vscode.window.createStatusBarItem(
@@ -272,6 +279,7 @@ export function activate(context: vscode.ExtensionContext) {
 
           lastRun = { projectRoot, gradleTask, appId };
           disposeLogcat();
+          clearNetworkLog();
 
           const result = await reinstallOnExistingEmulator({
             projectRoot,
@@ -353,6 +361,7 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         disposeLogcat();
+        clearNetworkLog();
 
         const result = await runAndStreamLogs({
           projectRoot,
@@ -394,6 +403,7 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         disposeLogcat();
+        clearNetworkLog();
 
         const result = await runAndStreamLogs({
           projectRoot,
@@ -456,6 +466,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         disposeLogcat();
+        clearNetworkLog();
 
         const { dispose } = streamLogcat(deviceId, output, pid, (line) => networkParser.processLine(line));
         currentLogcatDispose = dispose;
@@ -528,6 +539,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Solo parar el logcat, NO matar el emulador
         stopLogcatOnly();
+        clearNetworkLog();
 
         const result = await reinstallOnExistingEmulator({
           projectRoot,

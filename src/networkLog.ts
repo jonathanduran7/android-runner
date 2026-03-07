@@ -352,7 +352,7 @@ export class NetworkLogTreeProvider
 export function registerNetworkView(
   context: vscode.ExtensionContext,
   networkOutput: vscode.OutputChannel
-): { provider: NetworkLogTreeProvider; parser: OkHttpParser } {
+): { provider: NetworkLogTreeProvider; parser: OkHttpParser; clearNetworkLog: () => void } {
   const provider = new NetworkLogTreeProvider();
 
   const parser = new OkHttpParser((tx) => {
@@ -366,13 +366,15 @@ export function registerNetworkView(
     );
   } catch { /* already registered */ }
 
+  const clearNetworkLog = () => {
+    provider.clear();
+    parser.reset();
+    networkOutput.clear();
+  };
+
   try {
     context.subscriptions.push(
-      vscode.commands.registerCommand("androidRunner.clearNetworkLog", () => {
-        provider.clear();
-        parser.reset();
-        networkOutput.clear();
-      })
+      vscode.commands.registerCommand("androidRunner.clearNetworkLog", clearNetworkLog)
     );
   } catch { /* already registered */ }
 
@@ -388,5 +390,5 @@ export function registerNetworkView(
     );
   } catch { /* already registered */ }
 
-  return { provider, parser };
+  return { provider, parser, clearNetworkLog };
 }
