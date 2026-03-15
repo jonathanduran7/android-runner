@@ -8,8 +8,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [0.0.5] - 2026-03-14
+
 ### Added
 - New setting `androidRunner.gradleRoot`: relative path from the workspace root to the directory containing `gradlew` (e.g. `"android"` for React Native, Expo, and Flutter projects). Leave empty to keep the default behavior (workspace root).
+- **One-click flavor install**: clicking a flavor in the *Flavors* section of the sidebar now installs it directly. If one device/emulator is active it is used automatically; if several are active a picker is shown; if none is running, an AVD picker is displayed to start one.
 
 ---
 

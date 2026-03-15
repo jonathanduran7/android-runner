@@ -19,11 +19,16 @@ function getProjectRoot(): string | null {
   return workspace ? workspace.uri.fsPath : null;
 }
 
-function hasGradlew(projectRoot: string): boolean {
+function getGradleRoot(workspaceRoot: string): string {
+  const sub = vscode.workspace.getConfiguration("androidRunner").get<string>("gradleRoot") ?? "";
+  return sub ? path.join(workspaceRoot, sub) : workspaceRoot;
+}
+
+function hasGradlew(gradleRoot: string): boolean {
   const gradlew =
     process.platform === "win32"
-      ? path.join(projectRoot, "gradlew.bat")
-      : path.join(projectRoot, "gradlew");
+      ? path.join(gradleRoot, "gradlew.bat")
+      : path.join(gradleRoot, "gradlew");
   return fs.existsSync(gradlew);
 }
 
@@ -87,6 +92,11 @@ export class AndroidTreeDataProvider
       );
       item.iconPath = new vscode.ThemeIcon("package");
       item.tooltip = element.task;
+      item.command = {
+        command: "androidRunner.installFlavor",
+        title: "Install",
+        arguments: [element.task],
+      };
       return item;
     }
 
@@ -245,7 +255,11 @@ export class AndroidTreeDataProvider
 
   private async getFlavorChildren(): Promise<TreeNode[]> {
     const projectRoot = getProjectRoot();
-    if (!projectRoot || !hasGradlew(projectRoot)) {
+    if (!projectRoot) {
+      return [{ kind: "flavor", task: "Open an Android project (gradlew)" }];
+    }
+    const gradleRoot = getGradleRoot(projectRoot);
+    if (!hasGradlew(gradleRoot)) {
       return [
         {
           kind: "flavor",
@@ -255,7 +269,7 @@ export class AndroidTreeDataProvider
     }
 
     try {
-      const tasks = await listInstallTasks(projectRoot);
+      const tasks = await listInstallTasks(gradleRoot);
       if (tasks.length === 0) {
         return [
           {

@@ -567,6 +567,122 @@ export function activate(context: vscode.ExtensionContext) {
       }
   });
 
+  safeRegisterCommand(context, "androidRunner.installFlavor", async (task: unknown) => {
+    try {
+      if (typeof task !== "string" || !task) {
+        vscode.window.showErrorMessage("Android Runner: No flavor task provided.");
+        return;
+      }
+
+      const projectRoot = ensureWorkspace();
+      const gradleRoot = getGradleRoot(projectRoot);
+      checkGradlew(gradleRoot);
+      checkSdk();
+
+      const config = getConfig();
+      const keepEmulator = config.get<boolean>("keepEmulator") ?? false;
+
+      const [runningId, physicalDevices, avds] = await Promise.all([
+        getRunningEmulator(),
+        getPhysicalDevices(),
+        listAvds(),
+      ]);
+
+      const allActive = [
+        ...(runningId ? [runningId] : []),
+        ...physicalDevices.map((d) => d.id),
+      ];
+
+      let chosenDeviceId: string | null = null;
+      let avdToStart: string | null = null;
+
+      if (allActive.length === 1) {
+        chosenDeviceId = allActive[0];
+      } else if (allActive.length > 1) {
+        const items: vscode.QuickPickItem[] = [
+          ...(runningId
+            ? [{ label: `$(device-mobile) ${runningId}`, description: "running emulator", detail: runningId }]
+            : []),
+          ...physicalDevices.map((d) => ({
+            label: `$(plug) ${d.model ?? d.id}`,
+            description: d.id,
+            detail: d.id,
+          })),
+        ];
+        const pick = await vscode.window.showQuickPick(items, {
+          title: "Select device",
+          placeHolder: "Choose a device to install on",
+        });
+        if (!pick) {
+          return;
+        }
+        chosenDeviceId = pick.detail ?? null;
+      } else {
+        // No device running — ask which AVD to start
+        if (avds.length === 0) {
+          vscode.window.showErrorMessage(
+            "No emulator running and no AVDs found. Run 'emulator -list-avds' in terminal to verify your Android SDK setup."
+          );
+          return;
+        }
+        const avdPick = await vscode.window.showQuickPick(
+          avds.map((n) => ({ label: n })),
+          {
+            title: "No device running. Select AVD to start",
+            placeHolder: "Choose an emulator to launch",
+          }
+        );
+        if (!avdPick) {
+          return;
+        }
+        avdToStart = avdPick.label;
+      }
+
+      const appId = getAppIdForTask(task, gradleRoot);
+      if (!appId) {
+        vscode.window.showErrorMessage(
+          `Could not detect applicationId for ${task}. Add "androidRunner.taskAppIds" in settings, e.g. {"installDebug": "com.example.app.debug"}.`
+        );
+        return;
+      }
+
+      lastRun = { projectRoot: gradleRoot, gradleTask: task, appId };
+      disposeLogcat();
+      clearNetworkLog();
+
+      let result;
+      if (chosenDeviceId) {
+        result = await reinstallOnExistingEmulator({
+          projectRoot: gradleRoot,
+          deviceId: chosenDeviceId,
+          gradleTask: task,
+          appId,
+          output,
+          notify: createNotifier(),
+          onHttpLine: (line) => networkParser.processLine(line),
+        });
+      } else {
+        result = await runAndStreamLogs({
+          projectRoot: gradleRoot,
+          avdName: avdToStart,
+          gradleTask: task,
+          appId,
+          keepEmulator,
+          output,
+          notify: createNotifier(),
+          onHttpLine: (line) => networkParser.processLine(line),
+        });
+      }
+
+      currentLogcatDispose = result.logcatDispose;
+      currentStopLogcat = result.stopLogcat;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Android Runner: ${msg}`);
+      output.appendLine(`[ERROR] ${msg}`);
+    }
+  });
+
   context.subscriptions.push({
     dispose: disposeLogcat,
   });
