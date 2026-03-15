@@ -133,6 +133,11 @@
           "default": {},
           "description": "Override applicationId per Gradle install task suffix (e.g. {\"installStaging\": \"com.example.app.staging\"}). If empty, the extension auto-detects the applicationId from app/build.gradle."
         },
+        "androidRunner.gradleRoot": {
+          "type": "string",
+          "default": "",
+          "description": "Relative path from the workspace root to the directory that contains gradlew. Leave empty to use the workspace root."
+        },
         "androidRunner.notifications": {
           "type": "boolean",
           "default": true,

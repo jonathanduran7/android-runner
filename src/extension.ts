@@ -67,6 +67,11 @@ function ensureWorkspace(): string {
   return workspace.uri.fsPath;
 }
 
+function getGradleRoot(workspaceRoot: string): string {
+  const sub = getConfig().get<string>("gradleRoot") ?? "";
+  return sub ? path.join(workspaceRoot, sub) : workspaceRoot;
+}
+
 function checkGradlew(projectRoot: string): void {
   const gradlew =
     process.platform === "win32"
@@ -204,7 +209,8 @@ export function activate(context: vscode.ExtensionContext) {
   safeRegisterCommand(context, "androidRunner.runAndLogs", async () => {
       try {
         const projectRoot = ensureWorkspace();
-        checkGradlew(projectRoot);
+        const gradleRoot = getGradleRoot(projectRoot);
+        checkGradlew(gradleRoot);
         checkSdk();
 
         const config = getConfig();
@@ -244,7 +250,7 @@ export function activate(context: vscode.ExtensionContext) {
           const physicalDeviceId = avdPick.detail.slice(PHYSICAL_DEVICE_PREFIX.length);
 
           // QuickPick 2: Install task
-          const tasks = await listInstallTasks(projectRoot);
+          const tasks = await listInstallTasks(gradleRoot);
           if (tasks.length === 0) {
             vscode.window.showErrorMessage(
               "No install tasks found. Run ./gradlew :app:tasks --all to verify."
@@ -255,7 +261,7 @@ export function activate(context: vscode.ExtensionContext) {
           const taskPick = await vscode.window.showQuickPick(
             tasks.map((t) => ({
               label: t,
-              description: getAppIdForTask(t, projectRoot) ?? "(auto-detect from build.gradle)",
+              description: getAppIdForTask(t, gradleRoot) ?? "(auto-detect from build.gradle)",
             })),
             {
               title: "Select install task",
@@ -268,7 +274,7 @@ export function activate(context: vscode.ExtensionContext) {
           }
 
           const gradleTask = taskPick.label;
-          const appId = getAppIdForTask(gradleTask, projectRoot);
+          const appId = getAppIdForTask(gradleTask, gradleRoot);
 
           if (!appId) {
             vscode.window.showErrorMessage(
@@ -277,12 +283,12 @@ export function activate(context: vscode.ExtensionContext) {
             return;
           }
 
-          lastRun = { projectRoot, gradleTask, appId };
+          lastRun = { projectRoot: gradleRoot, gradleTask, appId };
           disposeLogcat();
           clearNetworkLog();
 
           const result = await reinstallOnExistingEmulator({
-            projectRoot,
+            projectRoot: gradleRoot,
             deviceId: physicalDeviceId,
             gradleTask,
             appId,
@@ -321,7 +327,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // QuickPick 2: Install task
-        const tasks = await listInstallTasks(projectRoot);
+        const tasks = await listInstallTasks(gradleRoot);
         if (tasks.length === 0) {
           vscode.window.showErrorMessage(
             "No install tasks found. Run ./gradlew :app:tasks --all to verify."
@@ -332,7 +338,7 @@ export function activate(context: vscode.ExtensionContext) {
         const taskPick = await vscode.window.showQuickPick(
           tasks.map((t) => ({
             label: t,
-            description: getAppIdForTask(t, projectRoot) ?? "(auto-detect from build.gradle)",
+            description: getAppIdForTask(t, gradleRoot) ?? "(auto-detect from build.gradle)",
           })),
           {
             title: "Select install task",
@@ -345,7 +351,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         const gradleTask = taskPick.label;
-        const appId = getAppIdForTask(gradleTask, projectRoot);
+        const appId = getAppIdForTask(gradleTask, gradleRoot);
 
         if (!appId) {
           vscode.window.showErrorMessage(
@@ -355,7 +361,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         lastRun = {
-          projectRoot,
+          projectRoot: gradleRoot,
           gradleTask,
           appId,
         };
@@ -364,7 +370,7 @@ export function activate(context: vscode.ExtensionContext) {
         clearNetworkLog();
 
         const result = await runAndStreamLogs({
-          projectRoot,
+          projectRoot: gradleRoot,
           avdName,
           gradleTask,
           appId,
@@ -386,7 +392,8 @@ export function activate(context: vscode.ExtensionContext) {
   safeRegisterCommand(context, "androidRunner.runStaging", async () => {
       try {
         const projectRoot = ensureWorkspace();
-        checkGradlew(projectRoot);
+        const gradleRoot = getGradleRoot(projectRoot);
+        checkGradlew(gradleRoot);
         checkSdk();
 
         const config = getConfig();
@@ -397,7 +404,7 @@ export function activate(context: vscode.ExtensionContext) {
           "com.altwo.wallet.staging";
 
         lastRun = {
-          projectRoot,
+          projectRoot: gradleRoot,
           gradleTask: ":app:installStaging",
           appId,
         };
@@ -406,7 +413,7 @@ export function activate(context: vscode.ExtensionContext) {
         clearNetworkLog();
 
         const result = await runAndStreamLogs({
-          projectRoot,
+          projectRoot: gradleRoot,
           avdName: defaultAvd,
           gradleTask: ":app:installStaging",
           appId,
