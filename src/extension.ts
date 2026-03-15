@@ -3,7 +3,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { getRunningEmulator, getPhysicalDevices } from "./adb.js";
 import { killEmulator, streamLogcat } from "./adb.js";
-import { listAvds } from "./emulator.js";
+import { listAvds, startEmulator } from "./emulator.js";
 import { listInstallTasks, detectAppIdSync } from "./gradle.js";
 import { runAndStreamLogs, reinstallOnExistingEmulator } from "./runner.js";
 import { getSdkPath } from "./sdk.js";
@@ -680,6 +680,23 @@ export function activate(context: vscode.ExtensionContext) {
       const msg = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(`Android Runner: ${msg}`);
       output.appendLine(`[ERROR] ${msg}`);
+    }
+  });
+
+  safeRegisterCommand(context, "androidRunner.startEmulator", (avdName: unknown) => {
+    if (typeof avdName !== "string" || !avdName) {
+      vscode.window.showErrorMessage("Android Runner: No AVD name provided.");
+      return;
+    }
+    try {
+      checkSdk();
+      startEmulator(avdName, output);
+      if (getConfig().get<boolean>("notifications") !== false) {
+        vscode.window.showInformationMessage(`Starting emulator: ${avdName}`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`Android Runner: ${msg}`);
     }
   });
 

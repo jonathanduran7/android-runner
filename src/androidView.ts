@@ -74,6 +74,13 @@ export class AndroidTreeDataProvider
       );
       item.description = element.running ? "running" : undefined;
       item.tooltip = element.running ? `${element.name} (running)` : element.name;
+      if (!element.running) {
+        item.command = {
+          command: "androidRunner.startEmulator",
+          title: "Start Emulator",
+          arguments: [element.name],
+        };
+      }
       return item;
     }
 

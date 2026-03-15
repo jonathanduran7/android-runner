@@ -104,6 +104,12 @@
         "category": "Android",
         "title": "Install Flavor",
         "icon": "$(play)"
+      },
+      {
+        "command": "androidRunner.startEmulator",
+        "category": "Android",
+        "title": "Start Emulator",
+        "icon": "$(vm)"
       }
     ],
     "menus": {
