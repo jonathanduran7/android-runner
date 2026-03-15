@@ -1,20 +1,43 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  Tech stack: TypeScript (no bundler, compiled via tsc to out/), VS Code Extension API (^1.105.1)
+  Project: Android Runner — a VS Code / Cursor extension that integrates the Android build-and-run
+  workflow into the editor. Enables launching emulators, installing APKs via Gradle, streaming
+  filtered logcat, and intercepting OkHttp network traffic from logcat.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Key modules:
+  - src/extension.ts — activate() entry point; registers all commands and status bar items
+  - src/runner.ts — main orchestration: emulator start → gradle install → app launch → logcat
+  - src/adb.ts — ADB wrapper (exec/spawn): devices, pidof, logcat, launchApp, killEmulator
+  - src/emulator.ts — emulator lifecycle: listAvds(), startEmulator(), waitForEmulator()
+  - src/gradle.ts — listInstallTasks(), runGradleInstall(), detectAppIdSync()
+  - src/sdk.ts — SDK path resolution (setting → ANDROID_HOME → ANDROID_SDK_ROOT → OS defaults)
+  - src/androidView.ts — "Android" sidebar TreeDataProvider (actions, devices, emulators, flavors)
+  - src/networkLog.ts — OkHttpParser + NetworkLogTreeProvider + printTransaction()
+
+  Process patterns:
+  - Short-lived queries: promisify(exec) with timeouts
+  - Long-running attached processes: spawn() with piped stdout/stderr streamed to OutputChannel
+  - Detached background processes: spawn() with detached: true and child.unref()
+
+  State management: all runtime state in closure variables inside activate() — no persistent
+  globalState/workspaceState usage.
+
+  Commands: androidRunner.runAndLogs, runStaging, reinstallLast, logs, stopLogs, killEmulator,
+  installFlavor, focusLogs, refreshView, clearNetworkLog, showNetworkTransaction
+
+  Configuration settings: sdkPath, defaultAvd, keepEmulator, notifications, taskAppIds, gradleRoot
+
+  Conventions:
+  - TypeScript strict mode, ESLint (eslint.config.mjs)
+  - Compiled output in out/; source maps included
+  - No runtime npm dependencies (all devDependencies)
+
+rules:
+  proposal:
+    - Keep proposals concise (under 400 words)
+    - Always include a Non-goals section
+  tasks:
+    - Break tasks into chunks completable in one focused session
+    - Reference the relevant source file(s) in each task
